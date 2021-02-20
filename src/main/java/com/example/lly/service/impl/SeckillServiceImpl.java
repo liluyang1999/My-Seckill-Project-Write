@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
 import java.sql.Timestamp;
@@ -167,6 +168,7 @@ public class SeckillServiceImpl implements SeckillService {
     @Override
     @SeckillLock
     @SeckillLimit
+    @Transactional(rollbackFor = Exception.class)
     public ExecutedResult executeSeckillTask(String username, Integer seckillInfoId, String checkedEncodedUrl) {
         //缓存中拿出加密后的Url值进行比对
         String cacheKey = "stateExposer:" + seckillInfoId;
