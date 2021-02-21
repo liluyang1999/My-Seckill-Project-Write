@@ -1,14 +1,15 @@
 package com.example.lly.controller;
 
+import com.example.lly.aop.SeckillLimit;
 import com.example.lly.dto.ExecutedResult;
 import com.example.lly.dto.StateExposer;
 import com.example.lly.entity.rbac.User;
 import com.example.lly.exception.BaseSeckillException;
 import com.example.lly.module.security.JwtTokenUtil;
-import com.example.lly.service.HttpService;
 import com.example.lly.service.JwtAuthService;
 import com.example.lly.service.SeckillService;
 import com.example.lly.service.UserSecurityService;
+import com.example.lly.util.RedisUtil;
 import com.example.lly.util.result.ResponseEnum;
 import com.example.lly.util.result.ResponseResult;
 import io.swagger.annotations.Api;
@@ -30,21 +31,22 @@ import java.util.concurrent.*;
 public class SeckillController {
 
     private static final int corePoolScale = Runtime.getRuntime().availableProcessors();   //JVM可用的核心数量
-    private static final ThreadPoolExecutor executor = new ThreadPoolExecutor(corePoolScale, corePoolScale + 1, 101, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(1500));
+    private static final ThreadPoolExecutor executor = new ThreadPoolExecutor(corePoolScale, corePoolScale + 1, 101,
+            TimeUnit.SECONDS, new LinkedBlockingQueue<>(1500));
     private static final Logger logger = LoggerFactory.getLogger(SeckillController.class);
-    private final HttpService httpService;
     private final SeckillService seckillService;
     private final JwtAuthService jwtAuthService;
     private final UserSecurityService userSecurityService;
+    private final RedisUtil redisUtil;
 
     @Autowired
-    public SeckillController(SeckillService seckillService, JwtAuthService jwtAuthService, UserSecurityService userSecurityService, HttpService httpService) {
+    public SeckillController(SeckillService seckillService, JwtAuthService jwtAuthService, UserSecurityService userSecurityService, RedisUtil redisUtil) {
         this.seckillService = seckillService;
         this.jwtAuthService = jwtAuthService;
         this.userSecurityService = userSecurityService;
-        this.httpService = httpService;
+        this.redisUtil = redisUtil;
     }
+
 
     /**
      * 当前时间数值一定从服务器端获取, 防止提前参与秒杀
@@ -63,14 +65,11 @@ public class SeckillController {
      * @param seckillInfoId 对应的秒杀活动
      * @return 包含秒杀状态实体的封装类  加密链接
      */
+    @SeckillLimit
     @RequestMapping(value = "/{seckillInfoId}/showStateExposer")
     public ResponseResult<StateExposer> showStateExpoer(@PathVariable("seckillInfoId") Integer seckillInfoId,
                                                         HttpServletRequest request) throws JSONException {
         String token = request.getHeader(JwtTokenUtil.TOKEN_HEADER);
-//        if (!authenticateToken(token)) {
-//            logger.error("请求秒杀链接时未检测到用户的登录信息, 请重新登录");
-//            return ResponseResult.error(ResponseEnum.NOT_LOGIN);
-//        }
 
         String username = JwtTokenUtil.getUsernameFromToken(token);
         User user = userSecurityService.getUserByUsername(username);
@@ -79,16 +78,16 @@ public class SeckillController {
             StateExposer exposer = seckillService.getCorrespondingStateExposer(seckillInfoId, user);
             responseResult = ResponseResult.success(exposer);
         } catch (Exception e) {
-            logger.error("**********发生异常！**********");
+            logger.error("发生异常");
             e.printStackTrace();
             responseResult = ResponseResult.error(ResponseEnum.FAILED);
         }
         return responseResult;
     }
 
+
     /**
      * 用户点击按钮后发送到此接口，开启秒杀执行过程
-     *
      * @param seckillInfoId 对应的活动Id
      * @param encodedUrl    需要检验的md5加密Url值
      * @param request       包含执行结果的封装类
@@ -99,24 +98,20 @@ public class SeckillController {
     public ResponseResult<ExecutedResult> executeSeckill(@PathVariable("seckillInfoId") Integer seckillInfoId,
                                                          @PathVariable("encodedUrl") String encodedUrl,
                                                          HttpServletRequest request) throws JSONException {
-        System.out.println("开始执行秒杀");
-        //先从缓存中查询用户, 空值则先让用户登录
         String token = request.getHeader(JwtTokenUtil.TOKEN_HEADER);
-//        if (!authenticateToken(token)) {
-//            logger.error("请求秒杀链接时未检测到用户的登录信息, 请重新登录");
-//            return ResponseResult.error(ResponseEnum.NOT_LOGIN);
-//        }
 
         String username = JwtTokenUtil.getUsernameFromToken(token);
         User user = userSecurityService.getUserByUsername(username);
         ExecutedResult executedResult;
         try {
+            //🔒🔒🔒🔒🔒🔒🔒🔒🔒🔒🔒🔒
             Callable<ExecutedResult> callable = () -> seckillService.executeSeckillTask(user.getUsername(), seckillInfoId, encodedUrl);
             Future<ExecutedResult> submit = executor.submit(callable);
             executedResult = submit.get();
+            //🔒🔒🔒🔒🔒🔒🔒🔒🔒🔒🔒🔒
             return ResponseResult.success(executedResult);
         } catch (BaseSeckillException | InterruptedException | ExecutionException e) {
-            //发生未知错误
+            //❌❌❌❌❌❌❌❌❌❌❌❌
             return ResponseResult.error(ResponseEnum.SERVER_ERROR);
         }
     }

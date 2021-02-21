@@ -1,6 +1,5 @@
 package com.example.lly.service.impl;
 
-import com.example.lly.aop.SeckillLimit;
 import com.example.lly.aop.SeckillLock;
 import com.example.lly.dao.mapper.OrderInfoMapper;
 import com.example.lly.dao.mapper.ProductMapper;
@@ -12,9 +11,7 @@ import com.example.lly.entity.OrderInfo;
 import com.example.lly.entity.Product;
 import com.example.lly.entity.SeckillInfo;
 import com.example.lly.entity.rbac.User;
-import com.example.lly.exception.BaseSeckillException;
 import com.example.lly.module.redis.RedisComponent;
-import com.example.lly.module.socket.WebSocketServer;
 import com.example.lly.service.SeckillService;
 import com.example.lly.service.UserSecurityService;
 import com.example.lly.util.BaseUtil;
@@ -41,17 +38,15 @@ public class SeckillServiceImpl implements SeckillService {
     private final SeckillInfoMapper seckillInfoMapper;
     private final OrderInfoMapper orderInfoMapper;
     private final ProductMapper productMapper;
-    private final UserMapper userMapper;
     private final RedisTemplate<String, Serializable> redisTemplate;
     private final RedisComponent redisComponent;
     private final UserSecurityService userSecurityService;
 
     @Autowired
-    public SeckillServiceImpl(SeckillInfoMapper seckillInfoMapper, OrderInfoMapper orderInfoMapper, ProductMapper productMapper, UserMapper userMapper, RedisTemplate<String, Serializable> redisTemplate, RedisComponent redisComponent, WebSocketServer webSocketServer, UserSecurityService userSecurityService) {
+    public SeckillServiceImpl(SeckillInfoMapper seckillInfoMapper, OrderInfoMapper orderInfoMapper, ProductMapper productMapper, UserMapper userMapper, RedisTemplate<String, Serializable> redisTemplate, RedisComponent redisComponent, UserSecurityService userSecurityService) {
         this.seckillInfoMapper = seckillInfoMapper;
         this.orderInfoMapper = orderInfoMapper;
         this.productMapper = productMapper;
-        this.userMapper = userMapper;
         this.redisTemplate = redisTemplate;
         this.redisComponent = redisComponent;
         this.userSecurityService = userSecurityService;
@@ -113,9 +108,9 @@ public class SeckillServiceImpl implements SeckillService {
         return seckillInfoInFutureList;
     }
 
+
     @Override
     public StateExposer getCorrespondingStateExposer(Integer seckillInfoId, User user) {
-//        redisComponent.putAllInAdvanced();
         HashOperations<String, String, Serializable> hashOperations = redisTemplate.opsForHash();
         String stateExposerKey = "stateExposer:" + seckillInfoId;
         String seckillInfoKey = "seckillInfoCollection";
@@ -159,6 +154,7 @@ public class SeckillServiceImpl implements SeckillService {
         return MD5Util.encodeString(url);
     }
 
+
     /**
      * @param username          该用户的账号
      * @param seckillInfoId     参加的秒杀活动的id
@@ -167,47 +163,65 @@ public class SeckillServiceImpl implements SeckillService {
      */
     @Override
     @SeckillLock
-    @SeckillLimit
     @Transactional(rollbackFor = Exception.class)
     public ExecutedResult executeSeckillTask(String username, Integer seckillInfoId, String checkedEncodedUrl) {
         //缓存中拿出加密后的Url值进行比对
         String cacheKey = "stateExposer:" + seckillInfoId;
         String trueEncodedUrl = ((StateExposer) redisTemplate.opsForHash().get(cacheKey, username)).getEncodedUrl();
-        //查询结果为空或者不匹配
+
         if (trueEncodedUrl == null || !trueEncodedUrl.equals(checkedEncodedUrl)) {
             logger.error("请勿篡改秒杀");
             return new ExecutedResult(seckillInfoId, SeckillStateType.TAMPER);
         }
 
-        try {
-            LocalDateTime currentTime = LocalDateTime.now();
-            int reduceCount = seckillInfoMapper.decreaseNumber(seckillInfoId, Timestamp.valueOf(currentTime));
-            if (reduceCount <= 0) {
-                //秒杀失败
-                logger.error("没有成功减少库存, 活动已结束, 秒杀失败");
-                return new ExecutedResult(seckillInfoId, SeckillStateType.FINISH);
+        LocalDateTime currentTime = LocalDateTime.now();
+        int reduceCount = seckillInfoMapper.decreaseNumber(seckillInfoId, Timestamp.valueOf(currentTime));
+        if (reduceCount <= 0) {
+            //秒杀失败
+            logger.error("没有成功减少库存, 活动已结束, 秒杀失败");
+            return new ExecutedResult(seckillInfoId, SeckillStateType.FINISH);
+        } else {
+            //扣减库存成功，继续检查是否属于重复秒杀
+            OrderInfo orderInfo = new OrderInfo(seckillInfoId,
+                    userSecurityService.getUserByUsername(username).getId(),
+                    Short.valueOf("1"),
+                    Timestamp.valueOf(currentTime));
+            int insertCount = orderInfoMapper.insert(orderInfo);
+            if (insertCount <= 0) {
+                logger.error("请勿重复秒杀");
+                return new ExecutedResult(seckillInfoId, SeckillStateType.DUPLICATE);
             } else {
-                //扣减库存成功，继续检查是否属于重复秒杀
-                OrderInfo orderInfo = new OrderInfo(seckillInfoId,
-                        userSecurityService.getUserByUsername(username).getId(),
-                        Short.valueOf("1"),
-                        Timestamp.valueOf(currentTime));
-                int insertCount = orderInfoMapper.insert(orderInfo);
-                if (insertCount <= 0) {
-                    logger.error("请勿重复秒杀");
-                    return new ExecutedResult(seckillInfoId, SeckillStateType.DUPLICATE);
-                } else {
-                    //秒杀成功, 返回包含订单信息的orderinfo
-                    return new ExecutedResult(seckillInfoId, SeckillStateType.SUCCESS, orderInfo);
-                }
+                //秒杀成功, 返回包含订单信息的orderinfo
+                return new ExecutedResult(seckillInfoId, SeckillStateType.SUCCESS, orderInfo);
             }
-        } catch (Exception e) {
-            logger.error(e.getMessage(), e);   //可能包括AOP锁中的MyException访问过于频繁异常
-            throw new BaseSeckillException();  //发生异常一定要捕获扔出去, Spring检测到RuntimeException才能回滚事务
         }
     }
 
     public boolean hasOrderBefore(Integer seckillInfoId, Integer userId) {
         return (orderInfoMapper.queryById(seckillInfoId, userId) != null);
     }
+
+
+    @Override
+    @SeckillLock
+    @Transactional(rollbackFor = Exception.class)
+    public ExecutedResult executeSeckillTask(String username, Integer seckillInfoId) {
+        LocalDateTime currentTime = LocalDateTime.now();
+        int reduceCount = seckillInfoMapper.decreaseNumber(seckillInfoId, Timestamp.valueOf(currentTime));
+        if (reduceCount <= 0) {
+            //秒杀失败
+            logger.error("没有成功减少库存, 不在时间范围内或商品已售完, 秒杀失败");
+            return new ExecutedResult(seckillInfoId, SeckillStateType.FINISH);
+        } else {
+            //扣减库存成功，继续检查是否属于重复秒杀
+            OrderInfo orderInfo = new OrderInfo(seckillInfoId,
+                    userSecurityService.getUserByUsername(username).getId(),
+                    Short.valueOf("1"),
+                    Timestamp.valueOf(currentTime));
+            //秒杀成功, 返回包含订单信息的orderinfo
+            return new ExecutedResult(seckillInfoId, SeckillStateType.SUCCESS, orderInfo);
+        }
+    }
+
+
 }

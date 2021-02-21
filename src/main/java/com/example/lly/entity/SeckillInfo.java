@@ -24,6 +24,7 @@ public class SeckillInfo implements Serializable {
 
     @Serial
     private static final long serialVersionUID = BaseUtil.SERIAL_VERSION_UID;
+
     @Id
     @NotNull
     @Column(name = "id", unique = true)
@@ -48,6 +49,7 @@ public class SeckillInfo implements Serializable {
     @Column(name = "original_price")
     protected Integer originalPrice;
 
+    @Transient
     @OneToOne
     @JoinColumn(referencedColumnName = "id")
     protected Product product;   //秒杀的商品
@@ -63,6 +65,7 @@ public class SeckillInfo implements Serializable {
     @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
     @Column(name = "end_time")
     protected Timestamp endTime;     //活动结束时间
+
     @Version
     @Column(name = "version")
     private int version;   //乐观锁版本控制

@@ -28,4 +28,6 @@ public interface SeckillService {
 
     boolean hasOrderBefore(Integer seckillInfoId, Integer userId);
 
+    ExecutedResult executeSeckillTask(String username, Integer seckillInfo);
+
 }

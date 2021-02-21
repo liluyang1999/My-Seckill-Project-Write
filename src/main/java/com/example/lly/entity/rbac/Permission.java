@@ -6,7 +6,7 @@ import lombok.Data;
 import javax.persistence.*;
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.List;
+import java.util.Set;
 
 @Data
 @Entity
@@ -16,21 +16,28 @@ public class Permission implements Serializable, Cloneable {
     @Serial
     @Transient
     private static final long serialVersionUID = BaseUtil.SERIAL_VERSION_UID;
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)   //由数据库自行修改ID
     private Integer id;
     private String name;
+
+
     @Column(columnDefinition = "enum('menu', 'button')")
     private String type;    //资源类型
     private String url;
     private String permission;
     private Integer parentId;      //父类编号
     private Boolean available;
+
+
     @ManyToMany(cascade = {CascadeType.REFRESH}, fetch = FetchType.EAGER)
     @JoinTable(name = "t_role_permission",
             joinColumns = {@JoinColumn(name = "permission_id")},
             inverseJoinColumns = {@JoinColumn(name = "role_id")})
-    private List<Role> roles;
+    private Set<Role> roles;
+
 
     @Override
     protected Object clone() throws CloneNotSupportedException {

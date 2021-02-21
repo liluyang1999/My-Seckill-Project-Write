@@ -6,7 +6,7 @@ import lombok.Data;
 import javax.persistence.*;
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.List;
+import java.util.Set;
 
 @Data
 @Entity
@@ -16,6 +16,8 @@ public class Role implements Serializable, Cloneable {
     @Serial
     @Transient
     private static final long serialVersionUID = BaseUtil.SERIAL_VERSION_UID;
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -23,16 +25,20 @@ public class Role implements Serializable, Cloneable {
     private String role;
     private String description;   //UI界面显示角色的信息
     private Boolean available = Boolean.TRUE;  //该角色是否可用
+
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "t_role_permission",
             joinColumns = {@JoinColumn(name = "role_id")},
             inverseJoinColumns = {@JoinColumn(name = "permission_id")})
-    private List<Permission> permissions;
+    private Set<Permission> permissions;
+
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "t_user_role",
             joinColumns = {@JoinColumn(name = "role_id")},
             inverseJoinColumns = {@JoinColumn(name = "user_id")})
-    private List<User> users;
+    private Set<User> users;
 
     @Override
     protected Object clone() throws CloneNotSupportedException {

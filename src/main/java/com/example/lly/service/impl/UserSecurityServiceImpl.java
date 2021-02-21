@@ -20,6 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class UserSecurityServiceImpl implements UserDetailsService, UserSecurityService {
@@ -87,7 +88,7 @@ public class UserSecurityServiceImpl implements UserDetailsService, UserSecurity
         return user;
     }
 
-    public boolean containsUserRole(List<Role> roles) {
+    public boolean containsUserRole(Set<Role> roles) {
         for (Role role : roles) {
             if (role.getRole().startsWith("user")) {
                 return true;
@@ -96,7 +97,7 @@ public class UserSecurityServiceImpl implements UserDetailsService, UserSecurity
         return false;
     }
 
-    public boolean containsAdminRole(List<Role> roles) {
+    public boolean containsAdminRole(Set<Role> roles) {
         for (Role role : roles) {
             if (role.getRole().startsWith("admin")) {
                 return true;
@@ -117,7 +118,7 @@ public class UserSecurityServiceImpl implements UserDetailsService, UserSecurity
 
     @Override
     public boolean hasPermission(User user, String permissionName) {
-        List<Permission> permissionList;
+        Set<Permission> permissionList;
         for (Role role : user.getRoles()) {
             permissionList = role.getPermissions();
             if (permissionList.stream().anyMatch(each -> each.getPermission().equals(permissionName))) {
