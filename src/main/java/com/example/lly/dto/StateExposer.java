@@ -22,6 +22,7 @@ public class StateExposer implements Serializable {
     private Boolean ifOpenSeckill;  //活动是否开启
     private String encodedUrl;   //md5加密值, 校验传过来的加密Url
     private Integer seckillInfoId;    //秒杀活动连接
+
     @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")
     private Timestamp now;
     @JsonFormat(timezone = "GMT+8", pattern = "yyyy-MM-dd HH:mm:ss")

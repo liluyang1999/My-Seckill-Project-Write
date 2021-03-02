@@ -5,7 +5,8 @@ public enum SeckillStateType {
     SUCCESS(1, "秒杀成功"),
     FINISH(2, "秒杀结束"),
     DUPLICATE(3, "重复秒杀"),
-    TAMPER(4, "篡改秒杀");
+    TAMPER(4, "篡改秒杀"),
+    EMPTY(5, "非法访问");
 
     private Integer code;
     private String msg;

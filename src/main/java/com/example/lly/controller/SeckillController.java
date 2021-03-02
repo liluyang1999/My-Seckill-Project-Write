@@ -1,6 +1,5 @@
 package com.example.lly.controller;
 
-import com.example.lly.aop.SeckillLimit;
 import com.example.lly.dto.ExecutedResult;
 import com.example.lly.dto.StateExposer;
 import com.example.lly.entity.rbac.User;
@@ -65,7 +64,6 @@ public class SeckillController {
      * @param seckillInfoId 对应的秒杀活动
      * @return 包含秒杀状态实体的封装类  加密链接
      */
-    @SeckillLimit
     @RequestMapping(value = "/{seckillInfoId}/showStateExposer")
     public ResponseResult<StateExposer> showStateExpoer(@PathVariable("seckillInfoId") Integer seckillInfoId,
                                                         HttpServletRequest request) throws JSONException {
@@ -97,7 +95,7 @@ public class SeckillController {
     @RequestMapping(value = "/{seckillInfoId}/{encodedUrl}/executeSeckillWithAopLock")
     public ResponseResult<ExecutedResult> executeSeckill(@PathVariable("seckillInfoId") Integer seckillInfoId,
                                                          @PathVariable("encodedUrl") String encodedUrl,
-                                                         HttpServletRequest request) throws JSONException {
+                                                         HttpServletRequest request) {
         String token = request.getHeader(JwtTokenUtil.TOKEN_HEADER);
 
         String username = JwtTokenUtil.getUsernameFromToken(token);

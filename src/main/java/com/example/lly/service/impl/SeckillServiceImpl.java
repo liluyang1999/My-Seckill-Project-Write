@@ -117,9 +117,9 @@ public class SeckillServiceImpl implements SeckillService {
         SeckillInfo seckillInfo;
 
         String username = user.getUsername();
-        if (hashOperations.hasKey(stateExposerKey, username)) {
-            return (StateExposer) hashOperations.get(stateExposerKey, username);
-        }
+//        if (hashOperations.hasKey(stateExposerKey, username)) {
+//            return (StateExposer) hashOperations.get(stateExposerKey, username);
+//        }
 
         if (hashOperations.hasKey(seckillInfoKey, seckillInfoId)) {
             seckillInfo = (SeckillInfo) hashOperations.get(seckillInfoKey, seckillInfoId);
@@ -130,6 +130,7 @@ public class SeckillServiceImpl implements SeckillService {
         LocalDateTime currentTime = LocalDateTime.now();
         LocalDateTime startTime = seckillInfo.getStartTime().toLocalDateTime();
         LocalDateTime endTime = seckillInfo.getEndTime().toLocalDateTime();
+        System.out.println("seckillInfo: " + seckillInfo);
         StateExposer stateExposer;
         if (currentTime.isAfter(startTime) && currentTime.isBefore(endTime)) {
             //在秒杀时间段内，响应一个地址给客户端，同时存入缓存
@@ -165,10 +166,15 @@ public class SeckillServiceImpl implements SeckillService {
     @SeckillLock
     @Transactional(rollbackFor = Exception.class)
     public ExecutedResult executeSeckillTask(String username, Integer seckillInfoId, String checkedEncodedUrl) {
-        //缓存中拿出加密后的Url值进行比对
+        //缓存中拿出加密Url值进行比对, 为空则非法访问
         String cacheKey = "stateExposer:" + seckillInfoId;
-        String trueEncodedUrl = ((StateExposer) redisTemplate.opsForHash().get(cacheKey, username)).getEncodedUrl();
+        StateExposer stateExposer = ((StateExposer) redisTemplate.opsForHash().get(cacheKey, username));
+        if (stateExposer == null) {
+            logger.error("未检测到该链接");
+            return new ExecutedResult(seckillInfoId, SeckillStateType.EMPTY);
+        }
 
+        String trueEncodedUrl = stateExposer.getEncodedUrl();
         if (trueEncodedUrl == null || !trueEncodedUrl.equals(checkedEncodedUrl)) {
             logger.error("请勿篡改秒杀");
             return new ExecutedResult(seckillInfoId, SeckillStateType.TAMPER);
@@ -191,6 +197,7 @@ public class SeckillServiceImpl implements SeckillService {
                 logger.error("请勿重复秒杀");
                 return new ExecutedResult(seckillInfoId, SeckillStateType.DUPLICATE);
             } else {
+                redisComponent.putAllSeckillInfos();
                 //秒杀成功, 返回包含订单信息的orderinfo
                 return new ExecutedResult(seckillInfoId, SeckillStateType.SUCCESS, orderInfo);
             }
